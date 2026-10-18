@@ -40,6 +40,9 @@ position = Vector2(8, 8)
 [node name="Ground" type="TileMapLayer" parent="WorldViewport/SubViewport/WorldRoot"]
 unique_name_in_owner = true
 
+[node name="Water" type="Node2D" parent="WorldViewport/SubViewport/WorldRoot"]
+unique_name_in_owner = true
+
 [node name="Decor" type="Node2D" parent="WorldViewport/SubViewport/WorldRoot"]
 unique_name_in_owner = true
 

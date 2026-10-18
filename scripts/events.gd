@@ -45,8 +45,11 @@ func _fire_template(t: Dictionary) -> void:
 	var a: Dictionary = GameState.villagers[randi() % GameState.villagers.size()]
 	var b: Dictionary = GameState.villagers[randi() % GameState.villagers.size()]
 	var text: String = t["text"]
-	if text.find("%s") != -1:
+	var placeholders := text.count("%s")
+	if placeholders >= 2:
 		text = text % [a["name"], b["name"]]
+	elif placeholders == 1:
+		text = text % a["name"]
 	match t["fx"]:
 		"relationship":
 			a["relationships"][b["id"]] = clampf(a["relationships"].get(b["id"], 0.3) + 0.08, 0.0, 1.0)

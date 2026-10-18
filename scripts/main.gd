@@ -5,6 +5,7 @@ const TEX_PATH := "res://assets/kenney/tiny-town/Tilemap/tilemap_packed.png"
 
 @onready var world_root: Node2D = %WorldRoot
 @onready var tilemap: TileMapLayer = %Ground
+@onready var water_layer: Node2D = %Water
 @onready var decor: Node2D = %Decor
 @onready var buildings_root: Node2D = %Buildings
 @onready var villagers_root: Node2D = %Villagers
@@ -28,8 +29,8 @@ func _ready() -> void:
 	world_root.scale = Vector2(_world_scale, _world_scale)
 	_setup_tilemap()
 	_paint_map()
-	_spawn_water()
-	_spawn_decor()
+	_spawn_river()
+	_spawn_world_props()
 	_refresh_buildings()
 	_setup_ui()
 	_sync_villagers()
@@ -69,52 +70,81 @@ func _paint_map() -> void:
 			var idx := VillageTiles.GRASS
 			match terrain:
 				GameState.Terrain.GRASS:
-					idx = VillageTiles.GRASS if (x + y) % 3 else VillageTiles.GRASS_FLOWERS
+					idx = _grass_variant(x, y)
 				GameState.Terrain.GRASS_ALT:
-					idx = VillageTiles.GRASS_ALT
+					idx = VillageTiles.GRASS_TUFTS
 				GameState.Terrain.PATH:
-					idx = VillageTiles.PATH
+					idx = VillageTiles.PATH_FILL
 				GameState.Terrain.WATER:
-					idx = VillageTiles.WATER
+					idx = VillageTiles.GROUND_UNDER_WATER
 				GameState.Terrain.BLOCKED:
-					idx = VillageTiles.STONE_FLOOR
+					idx = VillageTiles.STONE_COURTYARD
 			tilemap.set_cell(Vector2i(x, y), 0, _tile_atlas(idx))
 
-func _spawn_water() -> void:
+func _grass_variant(x: int, y: int) -> int:
+	var n := (x * 7 + y * 13) % 5
+	match n:
+		0:
+			return VillageTiles.GRASS
+		1:
+			return VillageTiles.GRASS_TUFTS
+		2:
+			return VillageTiles.GRASS_FLOWERS
+		_:
+			return VillageTiles.GRASS
+
+func _spawn_river() -> void:
+	for c in water_layer.get_children():
+		c.queue_free()
 	for y in GameState.MAP_H:
 		for x in GameState.MAP_W:
-			if GameState.map_grid[y][x] == GameState.Terrain.WATER:
-				var r := ColorRect.new()
-				r.size = Vector2(16, 16)
-				r.position = Vector2(x, y) * 16
-				r.color = Color(0.22, 0.45, 0.82, 0.85)
-				decor.add_child(r)
+			if GameState.map_grid[y][x] != GameState.Terrain.WATER:
+				continue
+			var r := ColorRect.new()
+			r.size = Vector2(16, 16)
+			r.position = Vector2(x, y) * 16
+			r.color = Color(0.18, 0.42, 0.78, 0.88)
+			water_layer.add_child(r)
 
-func _spawn_decor() -> void:
+func _spawn_world_props() -> void:
 	for c in decor.get_children():
 		c.queue_free()
-	_place_sprite(VillageTiles.TREE, Vector2i(6, 2))
-	_place_sprite(VillageTiles.TREE, Vector2i(8, 2))
-	_place_sprite(VillageTiles.TREE, Vector2i(12, 2))
-	_place_sprite(VillageTiles.TREE_ORANGE, Vector2i(14, 2))
-	_place_sprite(VillageTiles.TREE, Vector2i(15, 3))
-	_place_sprite(VillageTiles.BUSH, Vector2i(5, 4))
-	_place_sprite(VillageTiles.BUSH, Vector2i(16, 8))
-	_place_sprite(VillageTiles.SHRINE_STONE, Vector2i(18, 3))
-	_place_sprite(VillageTiles.SHRINE_STONE, Vector2i(19, 4))
-	_place_sprite(VillageTiles.WELL, Vector2i(7, 10))
-	_place_sprite(VillageTiles.TREE, Vector2i(19, 13))
-	_place_sprite(VillageTiles.TREE, Vector2i(18, 15))
+	# Forest edge (north)
+	_place_prop(VillageTiles.TREE_PINE, Vector2i(6, 2), 12)
+	_place_prop(VillageTiles.TREE_PINE, Vector2i(8, 2), 12)
+	_place_prop(VillageTiles.TREE_PAIR, Vector2i(10, 2), 12)
+	_place_prop(VillageTiles.TREE_PINE, Vector2i(12, 2), 12)
+	_place_prop(VillageTiles.TREE_PINE_AUTUMN, Vector2i(14, 2), 12)
+	_place_prop(VillageTiles.TREE_PINE, Vector2i(15, 3), 12)
+	_place_prop(VillageTiles.BUSH, Vector2i(5, 4), 13)
+	# Shrine (stone arch + sign)
+	_place_prop(VillageTiles.STONE_ARCH, Vector2i(18, 3), 11)
+	_place_prop(VillageTiles.STONE_ARCH, Vector2i(19, 4), 11)
+	# Village well
+	_place_prop(VillageTiles.WELL, Vector2i(7, 10), 10)
+	_place_prop(VillageTiles.SIGNPOST, Vector2i(9, 9), 11)
+	# Ruins / forest south-east
+	_place_prop(VillageTiles.STONE_RUIN_CORNER, Vector2i(19, 13), 11)
+	_place_prop(VillageTiles.TREE_ROUND, Vector2i(18, 15), 12)
+	_place_prop(VillageTiles.TREE_PINE, Vector2i(19, 15), 12)
+	_place_prop(VillageTiles.MUSHROOM, Vector2i(17, 14), 13)
+	_place_prop(VillageTiles.BUSH, Vector2i(16, 8), 13)
 
-func _place_sprite(tile_index: int, cell: Vector2i) -> void:
+func _place_prop(tile_index: int, cell: Vector2i, feet_y: float = 14.0) -> void:
+	var s := _make_atlas_sprite(tile_index)
+	s.position = Vector2(cell) * 16 + Vector2(8, feet_y)
+	s.z_index = int(feet_y)
+	decor.add_child(s)
+
+func _make_atlas_sprite(tile_index: int) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = load(TEX_PATH)
 	s.region_enabled = true
 	var ac := _tile_atlas(tile_index)
 	s.region_rect = Rect2(ac.x * 16, ac.y * 16, 16, 16)
-	s.position = Vector2(cell) * 16 + Vector2(8, 8)
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	decor.add_child(s)
+	s.centered = true
+	return s
 
 func _refresh_buildings() -> void:
 	for c in buildings_root.get_children():
@@ -124,22 +154,13 @@ func _refresh_buildings() -> void:
 			_draw_building(bid, GameState.buildings[bid]["pos"])
 
 func _draw_building(bid: String, origin: Vector2i) -> void:
-	var parts: Array = []
-	match bid:
-		"hut":
-			parts = [VillageTiles.HOUSE_WOOD_A, VillageTiles.HOUSE_WOOD_B, VillageTiles.HOUSE_ROOF]
-		"lumber_camp":
-			parts = [VillageTiles.FENCE, VillageTiles.FENCE, VillageTiles.TREE]
-		"garden":
-			parts = [VillageTiles.BUSH, VillageTiles.BUSH, VillageTiles.GRASS_FLOWERS]
-		"workshop":
-			parts = [VillageTiles.HOUSE_WOOD_B, VillageTiles.HOUSE_WOOD_A, VillageTiles.HOUSE_ROOF]
-		"watchtower":
-			parts = [VillageTiles.TOWER_STONE, VillageTiles.TOWER_STONE, VillageTiles.HOUSE_ROOF]
-	var offsets := [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, -1)]
-	for i in parts.size():
-		var cell: Vector2i = origin + offsets[i]
-		_place_sprite(parts[i], cell)
+	var parts: Array = VillageTiles.blueprint_for(bid)
+	for part in parts:
+		var cell: Vector2i = origin + part["atlas_offset"]
+		var s := _make_atlas_sprite(part["index"])
+		s.position = Vector2(cell) * 16 + Vector2(8, 13)
+		s.z_index = 13
+		buildings_root.add_child(s)
 
 func _setup_ui() -> void:
 	build_option.clear()
@@ -190,35 +211,26 @@ func _sync_villagers() -> void:
 			villagers_root.add_child(node)
 			_villager_nodes[id] = node
 		var n: Node2D = _villager_nodes[id]
-		n.position = v["pos"] * 16
-		var bob := sin(Time.get_ticks_msec() * 0.006 + hash(id)) * 1.5
-		n.position.y += bob
+		var feet: Vector2 = v["pos"] * 16 + Vector2(8, 13)
+		var bob := sin(Time.get_ticks_msec() * 0.006 + hash(id)) * 1.0
+		n.position = feet + Vector2(0, bob)
+		n.z_index = 14
 		if GameState.selected_villager_id == id:
-			n.modulate = Color(1.2, 1.2, 1.0)
+			n.modulate = Color(1.15, 1.12, 1.0)
 		else:
 			n.modulate = Color.WHITE
 	_update_activity_label()
 
 func _make_villager_node(v: Dictionary) -> Node2D:
 	var root := Node2D.new()
-	var body := Sprite2D.new()
-	body.texture = load(TEX_PATH)
-	body.region_enabled = true
-	var ac := _tile_atlas(v["sprite"])
-	body.region_rect = Rect2(ac.x * 16, ac.y * 16, 16, 16)
-	body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	body.position = Vector2(8, 10)
+	var body := _make_atlas_sprite(v["sprite"])
+	body.position = Vector2.ZERO
 	root.add_child(body)
 	var label := Label.new()
 	label.text = v["name"]
-	label.position = Vector2(-4, -6)
+	label.position = Vector2(-10, -18)
 	label.add_theme_font_size_override("font_size", 7)
 	root.add_child(label)
-	var ring := ColorRect.new()
-	ring.size = Vector2(14, 14)
-	ring.position = Vector2(1, 6)
-	ring.color = Color(1, 1, 1, 0)
-	root.add_child(ring)
 	return root
 
 func _update_activity_label() -> void:
